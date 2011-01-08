@@ -11,7 +11,7 @@ class AuthMachine
   aasm_state :pending, :enter => :make_activation_code
   aasm_state :active,  :enter => :do_activate
   aasm_state :suspended
-  aasm_state :deleted, :enter => :do_delete, :exit => :do_undelete
+  aasm_state :deleted, :enter => :do_delete, :exit => :do_undelete, :guard => :has_admin_privs?
 
   aasm_event :register do
     transitions :from => :passive, :to => :pending, :guard => Proc.new {|u| u.can_register? }
@@ -73,6 +73,10 @@ class AuthMachine
 
   def has_activation_code?
     !!@activation_code
+  end
+
+  def has_admin_privs?
+    false
   end
 end
 
@@ -141,6 +145,17 @@ class AuthMachineTest < Test::Unit::TestCase
         @auth.unsuspend!
 
         assert_equal :passive, @auth.aasm_current_state
+      end
+
+      should "be NOT be deleted when calling the delete action with a failing guard on it" do
+        @auth = AuthMachine.new
+        @auth.activation_code = nil
+        @auth.deleted_at = nil
+
+        @auth.activate!
+        @auth.delete!  # but the state has a guard on it!!
+        assert_equal :active, @auth.aasm_current_state
+        assert_nil @auth.deleted_at
       end
     end
 
